@@ -8,11 +8,13 @@ Univershell is a modern web-based platform for managing multiple Active Director
 
 ### Core Capabilities
 - **Multi-Tenant Management**: Manage multiple AD and M365 tenants from a single interface
-- **Role-Based Access Control**: Granular permissions with user/role/tenant mapping
+- **Three-Tier Role System**: Global admins, tenant admins, and tenant users with granular permissions
+- **Group-Based Access Control**: Organize users into tenant-specific groups and assign scripts/workflows to groups
 - **Script Library**: Create, manage, and execute PowerShell scripts
 - **Workflow Engine**: Chain multiple scripts together with variable passing between steps
 - **Execution History**: Complete audit trail of all script and workflow executions
-- **Dual Authentication**: Support for both application (app-only) and delegated authentication
+- **Microsoft Graph Integration**: Built-in support for both application (app-only) and delegated authentication
+- **Tenant-Specific Administration**: Each tenant can have its own admins who manage users and groups within their tenant only
 
 ### Security Features
 - JWT-based authentication
@@ -27,6 +29,65 @@ Univershell is a modern web-based platform for managing multiple Active Director
 - Tenant-specific automation workflows
 - Compliance and audit requirements
 - Multi-organization IT service providers
+
+## Role-Based Access Control (RBAC)
+
+Univershell implements a sophisticated three-tier RBAC system:
+
+### 1. Global Roles (System-Wide)
+- **Global Admin**: Full control over entire system, all tenants, and all configurations
+- **Script Manager**: Create and manage scripts across all tenants
+- **Workflow Manager**: Create and manage workflows
+- **Operator**: Execute scripts and workflows
+- **Viewer**: Read-only access to execution logs
+
+### 2. Tenant Roles (Tenant-Specific)
+- **Tenant Admin**: Full control within their assigned tenant(s)
+  - Manage tenant users and groups
+  - Assign scripts/workflows to groups
+  - Cannot access other tenants unless explicitly granted
+- **Tenant User**: Regular user within a tenant
+  - Can only execute scripts/workflows assigned to their groups
+  - Cannot manage users or groups
+
+### 3. Group-Based Access
+- Users are organized into **Tenant Groups** (e.g., "IT Support", "HR", "Developers")
+- Scripts and workflows are assigned to groups, not individual users
+- Users inherit access to scripts/workflows through group membership
+
+### Example Scenario
+
+**Multi-tenant MSP managing Grey Owl and Onni:**
+
+```
+Global Admin (You)
+  ├── Grey Owl Tenant
+  │   ├── Grey Owl Admin (Sarah)
+  │   │   ├── Can manage Grey Owl users/groups
+  │   │   ├── Can assign scripts to Grey Owl groups
+  │   │   └── Cannot see Onni tenant
+  │   ├── Groups:
+  │   │   ├── "Grey Owl IT" → Assigned: Password Reset, User Creation scripts
+  │   │   └── "Grey Owl HR" → Assigned: Onboarding Workflow
+  │   └── Users: IT staff, HR staff
+  │
+  └── Onni Tenant
+      ├── Onni Admin (Mike)
+      │   ├── Can manage Onni users/groups
+      │   ├── Can assign scripts to Onni groups
+      │   └── Cannot see Grey Owl tenant
+      ├── Groups:
+      │   ├── "Onni IT" → Assigned: Different password policy script
+      │   └── "Onni HR" → Assigned: Different onboarding workflow
+      └── Users: IT staff, HR staff
+```
+
+**Key Benefits:**
+- Sarah (Grey Owl Admin) cannot access or modify Onni tenant
+- Mike (Onni Admin) cannot access or modify Grey Owl tenant
+- Different onboarding workflows for each tenant
+- Global Admin can manage both tenants
+- Users can be granted access to multiple tenants if needed
 
 ## Architecture
 
@@ -60,6 +121,7 @@ Univershell is a modern web-based platform for managing multiple Active Director
 - **Authentication**: JWT + bcryptjs
 - **Validation**: Zod
 - **PowerShell**: PowerShell Core 7+
+- **Microsoft Graph**: @microsoft/microsoft-graph-client + @azure/identity
 
 ### Frontend
 - **Framework**: React 18 with TypeScript
@@ -340,16 +402,32 @@ GET /api/executions/history?tenantId={id}&limit=50
 ## Database Schema
 
 Key models:
+
+**Global Authorization:**
 - **User**: User accounts
-- **Role**: Permission roles
-- **UserRole**: User-to-role assignments
+- **Role**: Global permission roles
+- **UserRole**: User-to-global-role assignments
 - **Tenant**: AD/M365 tenant configurations
-- **TenantAccess**: Role-to-tenant access mapping
+- **TenantAccess**: Global role-to-tenant access mapping
+
+**Tenant-Level Authorization:**
+- **TenantUser**: User-to-tenant assignments with tenant-specific roles (ADMIN or USER)
+- **TenantGroup**: Groups within a tenant (e.g., "IT Support", "HR")
+- **TenantGroupMember**: User memberships in tenant groups
+
+**Script & Workflow Management:**
 - **Script**: PowerShell scripts
 - **ScriptTenantAssignment**: Script-to-tenant assignments
+- **ScriptGroupAssignment**: Script-to-group assignments (NEW)
 - **Workflow**: Script orchestration workflows
 - **WorkflowStep**: Individual workflow steps
-- **ExecutionLog**: Audit trail of all executions
+- **WorkflowGroupAssignment**: Workflow-to-group assignments (NEW)
+
+**Credentials & Security:**
+- **TenantCredential**: Encrypted Microsoft Graph credentials (app-only and delegated)
+
+**Audit & Logging:**
+- **ExecutionLog**: Complete audit trail of all executions
 
 ## Security Considerations
 
@@ -429,6 +507,28 @@ npm run build
 # Start production server
 cd backend && npm start
 ```
+
+## Additional Documentation
+
+### Tenant Administration Guide
+For detailed information about:
+- Setting up tenant-level administrators
+- Creating and managing tenant groups
+- Assigning scripts/workflows to groups
+- Configuring Microsoft Graph authentication (app-only and delegated)
+- Multi-tenant workflows with variable passing
+
+See: **[TENANT_ADMIN_GUIDE.md](./TENANT_ADMIN_GUIDE.md)**
+
+### Quick Reference
+
+**New API Endpoints:**
+- `/api/tenant-admin/:tenantId/users` - Manage users within a tenant
+- `/api/tenant-admin/:tenantId/groups` - Manage tenant groups
+- `/api/tenant-admin/:tenantId/groups/:groupId/members` - Manage group members
+- `/api/script-groups/assign` - Assign scripts to groups
+- `/api/script-groups/my-scripts` - Get scripts available to current user
+- `/api/script-groups/assign-workflow` - Assign workflows to groups
 
 ## Contributing
 

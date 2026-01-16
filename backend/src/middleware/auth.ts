@@ -6,6 +6,7 @@ export interface AuthRequest extends Request {
   user?: JwtPayload & {
     roles: string[];
     tenantIds: string[];
+    tenantRoles: Record<string, 'ADMIN' | 'USER'>; // tenant-specific roles
   };
 }
 
@@ -36,6 +37,12 @@ export const authenticate = async (
               }
             }
           }
+        },
+        tenantUsers: {
+          where: { isActive: true },
+          include: {
+            tenant: true
+          }
         }
       }
     });
@@ -44,20 +51,27 @@ export const authenticate = async (
       return res.status(401).json({ error: 'Invalid or inactive user' });
     }
 
-    // Extract roles and accessible tenant IDs
+    // Extract global roles and accessible tenant IDs from global roles
     const roles = user.userRoles.map(ur => ur.role.name);
-    const tenantIds = Array.from(
-      new Set(
-        user.userRoles.flatMap(ur =>
-          ur.role.tenantAccess.map(ta => ta.tenantId)
-        )
-      )
+    const globalTenantIds = user.userRoles.flatMap(ur =>
+      ur.role.tenantAccess.map(ta => ta.tenantId)
     );
+
+    // Extract tenant-specific access and roles
+    const tenantSpecificIds = user.tenantUsers.map(tu => tu.tenantId);
+    const tenantRoles: Record<string, 'ADMIN' | 'USER'> = {};
+    user.tenantUsers.forEach(tu => {
+      tenantRoles[tu.tenantId] = tu.role;
+    });
+
+    // Combine global and tenant-specific access
+    const tenantIds = Array.from(new Set([...globalTenantIds, ...tenantSpecificIds]));
 
     req.user = {
       ...payload,
       roles,
-      tenantIds
+      tenantIds,
+      tenantRoles
     };
 
     next();
@@ -104,3 +118,35 @@ export const requireTenantAccess = async (
 
   next();
 };
+
+export const requireTenantAdmin = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const tenantId = req.params.tenantId || req.body.tenantId;
+
+  if (!tenantId) {
+    return res.status(400).json({ error: 'Tenant ID required' });
+  }
+
+  if (!req.user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  // Global admin has access to all tenants
+  if (req.user.roles.includes('admin')) {
+    return next();
+  }
+
+  // Check if user is tenant admin
+  const isTenantAdmin = req.user.tenantRoles[tenantId] === 'ADMIN';
+
+  if (!isTenantAdmin) {
+    return res.status(403).json({ error: 'Must be tenant admin' });
+  }
+
+  next();
+};
+
+export const requireGlobalAdmin = requireRole(['admin']);
