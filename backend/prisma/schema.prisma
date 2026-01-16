@@ -1,0 +1,258 @@
+// Prisma schema for Univershell
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// User Management
+// ============================================
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  userRoles      UserRole[]
+  executionLogs  ExecutionLog[]
+  createdScripts Script[]       @relation("ScriptCreator")
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  permissions Json     @default("[]") // Array of permission strings
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  userRoles     UserRole[]
+  tenantAccess  TenantAccess[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId    String   @map("user_id")
+  roleId    String   @map("role_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// ============================================
+// Tenant Management
+// ============================================
+
+model Tenant {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  displayName     String   @map("display_name")
+  description     String?
+  type            TenantType
+  config          Json     @default("{}") // Connection details, endpoints, etc.
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  tenantAccess       TenantAccess[]
+  credentials        TenantCredential[]
+  scriptAssignments  ScriptTenantAssignment[]
+  workflows          Workflow[]
+  executionLogs      ExecutionLog[]
+
+  @@map("tenants")
+}
+
+enum TenantType {
+  ACTIVE_DIRECTORY
+  MICROSOFT_365
+  HYBRID
+}
+
+model TenantAccess {
+  roleId    String   @map("role_id")
+  tenantId  String   @map("tenant_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, tenantId])
+  @@map("tenant_access")
+}
+
+model TenantCredential {
+  id                String         @id @default(uuid())
+  tenantId          String         @map("tenant_id")
+  credentialType    CredentialType @map("credential_type")
+  authType          AuthType       @map("auth_type")
+  clientId          String?        @map("client_id")
+  clientSecretEnc   String?        @map("client_secret_enc") // Encrypted
+  certificatePath   String?        @map("certificate_path")
+  tenantIdM365      String?        @map("tenant_id_m365") // M365 tenant ID
+  keyVaultRef       String?        @map("key_vault_ref") // Reference to Azure Key Vault
+  isActive          Boolean        @default(true) @map("is_active")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_credentials")
+}
+
+enum CredentialType {
+  ACTIVE_DIRECTORY
+  MICROSOFT_GRAPH
+  EXCHANGE_ONLINE
+  SHAREPOINT_ONLINE
+  AZURE_AD
+}
+
+enum AuthType {
+  APPLICATION // App-only auth
+  DELEGATED   // User delegated auth
+}
+
+// ============================================
+// Script Management
+// ============================================
+
+model Script {
+  id          String   @id @default(uuid())
+  name        String
+  displayName String   @map("display_name")
+  description String?
+  code        String   @db.Text
+  parameters  Json     @default("[]") // Array of parameter definitions
+  outputs     Json     @default("[]") // Array of output variable definitions
+  isGlobal    Boolean  @default(false) @map("is_global")
+  category    String?
+  tags        String[] @default([])
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  creator           User                     @relation("ScriptCreator", fields: [createdBy], references: [id])
+  tenantAssignments ScriptTenantAssignment[]
+  workflowSteps     WorkflowStep[]
+  executionLogs     ExecutionLog[]
+
+  @@unique([name, isGlobal])
+  @@map("scripts")
+}
+
+model ScriptTenantAssignment {
+  scriptId  String   @map("script_id")
+  tenantId  String   @map("tenant_id")
+  config    Json     @default("{}") // Tenant-specific overrides
+  createdAt DateTime @default(now()) @map("created_at")
+
+  script Script @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([scriptId, tenantId])
+  @@map("script_tenant_assignments")
+}
+
+// ============================================
+// Workflow Management (Script Chaining)
+// ============================================
+
+model Workflow {
+  id          String   @id @default(uuid())
+  name        String
+  displayName String   @map("display_name")
+  description String?
+  tenantId    String?  @map("tenant_id") // If null, available to all tenants
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  tenant        Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  steps         WorkflowStep[]
+  executionLogs ExecutionLog[]
+
+  @@map("workflows")
+}
+
+model WorkflowStep {
+  id              String   @id @default(uuid())
+  workflowId      String   @map("workflow_id")
+  scriptId        String   @map("script_id")
+  order           Int
+  variableMapping Json     @default("{}") // Maps output vars to input vars of next step
+  continueOnError Boolean  @default(false) @map("continue_on_error")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  script   Script   @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, order])
+  @@map("workflow_steps")
+}
+
+// ============================================
+// Execution & Audit Logging
+// ============================================
+
+model ExecutionLog {
+  id              String        @id @default(uuid())
+  userId          String        @map("user_id")
+  tenantId        String        @map("tenant_id")
+  scriptId        String?       @map("script_id")
+  workflowId      String?       @map("workflow_id")
+  executionType   ExecutionType @map("execution_type")
+  status          ExecutionStatus
+  inputParams     Json          @default("{}") @map("input_params")
+  outputData      Json?         @map("output_data")
+  errorMessage    String?       @db.Text @map("error_message")
+  duration        Int?          // Execution time in milliseconds
+  startedAt       DateTime      @default(now()) @map("started_at")
+  completedAt     DateTime?     @map("completed_at")
+
+  user     User      @relation(fields: [userId], references: [id])
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  script   Script?   @relation(fields: [scriptId], references: [id])
+  workflow Workflow? @relation(fields: [workflowId], references: [id])
+
+  @@index([userId, startedAt])
+  @@index([tenantId, startedAt])
+  @@map("execution_logs")
+}
+
+enum ExecutionType {
+  SCRIPT
+  WORKFLOW
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}

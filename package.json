@@ -1,0 +1,29 @@
+{
+  "name": "univershell",
+  "version": "0.1.0",
+  "description": "Univershell - Multi-tenant PowerShell management platform for Active Directory and Microsoft 365",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspaces",
+    "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend"
+  },
+  "keywords": [
+    "powershell",
+    "active-directory",
+    "microsoft-365",
+    "multi-tenant"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
