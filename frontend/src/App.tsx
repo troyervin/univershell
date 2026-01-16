@@ -9,6 +9,7 @@ import DashboardPage from './pages/DashboardPage';
 import ScriptsPage from './pages/ScriptsPage';
 import WorkflowsPage from './pages/WorkflowsPage';
 import TenantsPage from './pages/TenantsPage';
+import TenantAdminPage from './pages/TenantAdminPage';
 import ExecutionsPage from './pages/ExecutionsPage';
 import Layout from './components/Layout';
 
@@ -51,6 +52,7 @@ function App() {
           <Route path="scripts" element={<ScriptsPage />} />
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="tenants" element={<TenantsPage />} />
+          <Route path="tenant-admin/:tenantId" element={<TenantAdminPage />} />
           <Route path="executions" element={<ExecutionsPage />} />
         </Route>
       </Routes>

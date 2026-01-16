@@ -1,8 +1,17 @@
-import { Building2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Building2, Settings } from 'lucide-react';
 import { useTenantStore } from '../stores/tenantStore';
+import { useAuthStore } from '../stores/authStore';
 
 export default function TenantsPage() {
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
   const { tenants, selectedTenant, selectTenant } = useTenantStore();
+
+  const isTenantAdmin = (tenantId: string) => {
+    if (user?.roles?.includes('admin')) return true;
+    return user?.tenantRoles?.[tenantId] === 'ADMIN';
+  };
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -41,15 +50,14 @@ export default function TenantsPage() {
           {tenants.map((tenant) => (
             <div
               key={tenant.id}
-              className={`card hover:shadow-lg transition-all cursor-pointer ${
+              className={`card hover:shadow-lg transition-all ${
                 selectedTenant?.id === tenant.id
                   ? 'ring-2 ring-primary-500'
                   : ''
               }`}
-              onClick={() => selectTenant(tenant)}
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
+                <div className="flex-1 cursor-pointer" onClick={() => selectTenant(tenant)}>
                   <h3 className="font-semibold text-gray-900 text-lg">
                     {tenant.displayName}
                   </h3>
@@ -62,16 +70,31 @@ export default function TenantsPage() {
                 <p className="text-sm text-gray-600 mb-4">{tenant.description}</p>
               )}
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${getTypeColor(tenant.type)}`}>
                   {formatType(tenant.type)}
                 </span>
 
-                {selectedTenant?.id === tenant.id && (
-                  <span className="text-xs font-medium text-primary-600">
-                    Currently Selected
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {selectedTenant?.id === tenant.id && (
+                    <span className="text-xs font-medium text-primary-600">
+                      Selected
+                    </span>
+                  )}
+
+                  {isTenantAdmin(tenant.id) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/tenant-admin/${tenant.id}`);
+                      }}
+                      className="btn btn-secondary p-2"
+                      title="Manage Tenant"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
