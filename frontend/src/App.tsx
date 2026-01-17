@@ -12,6 +12,7 @@ import WorkflowsPage from './pages/WorkflowsPage';
 import TenantsPage from './pages/TenantsPage';
 import TenantAdminPage from './pages/TenantAdminPage';
 import ExecutionsPage from './pages/ExecutionsPage';
+import ExecutionDetailPage from './pages/ExecutionDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import Layout from './components/Layout';
 
@@ -58,6 +59,7 @@ function App() {
           <Route path="tenants" element={<TenantsPage />} />
           <Route path="tenant-admin/:tenantId" element={<TenantAdminPage />} />
           <Route path="executions" element={<ExecutionsPage />} />
+          <Route path="executions/:executionId" element={<ExecutionDetailPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Routes>

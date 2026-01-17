@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import api from '../lib/api';
 import { useTenantStore } from '../stores/tenantStore';
@@ -17,6 +18,7 @@ interface Execution {
 }
 
 export default function ExecutionsPage() {
+  const navigate = useNavigate();
   const { selectedTenant } = useTenantStore();
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +124,11 @@ export default function ExecutionsPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {executions.map((execution) => (
-                  <tr key={execution.id} className="hover:bg-gray-50">
+                  <tr
+                    key={execution.id}
+                    onClick={() => navigate(`/executions/${execution.id}`)}
+                    className="hover:bg-gray-50 cursor-pointer"
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         {getStatusIcon(execution.status)}

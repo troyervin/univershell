@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, ExternalLink, Loader, CheckCircle, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, ExternalLink, Loader, CheckCircle, XCircle, FileText } from 'lucide-react';
 import api from '../lib/api';
 
 interface ExecutionModalProps {
@@ -26,6 +27,7 @@ export default function ExecutionModal({
   authType,
   parameters = {},
 }: ExecutionModalProps) {
+  const navigate = useNavigate();
   const [authStatus, setAuthStatus] = useState<AuthStatus>('idle');
   const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>('idle');
   const [deviceCode, setDeviceCode] = useState<{
@@ -36,6 +38,7 @@ export default function ExecutionModal({
   } | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [executionId, setExecutionId] = useState<string | null>(null);
   const [executionResult, setExecutionResult] = useState<{
     success: boolean;
     output: any;
@@ -51,6 +54,7 @@ export default function ExecutionModal({
       setDeviceCode(null);
       setAccessToken(null);
       setError(null);
+      setExecutionId(null);
       setExecutionResult(null);
 
       // If script requires delegated auth, initiate device code flow immediately
@@ -130,6 +134,7 @@ export default function ExecutionModal({
         ...(token && { accessToken: token }),
       });
 
+      setExecutionId(response.data.executionId);
       setExecutionResult(response.data);
       setExecutionStatus(response.data.success ? 'success' : 'error');
     } catch (err: any) {
@@ -154,8 +159,16 @@ export default function ExecutionModal({
     setDeviceCode(null);
     setAccessToken(null);
     setError(null);
+    setExecutionId(null);
     setExecutionResult(null);
     onClose();
+  };
+
+  const handleViewFullLog = () => {
+    if (executionId) {
+      navigate(`/executions/${executionId}`);
+      handleClose();
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -322,31 +335,45 @@ export default function ExecutionModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
-          {executionStatus === 'idle' && authStatus === 'idle' && (
-            <>
-              <button onClick={handleClose} className="btn btn-secondary">
-                Cancel
+        <div className="flex items-center justify-between p-6 border-t bg-gray-50">
+          <div>
+            {executionId && (executionStatus === 'success' || executionStatus === 'error') && (
+              <button
+                onClick={handleViewFullLog}
+                className="btn btn-secondary flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                View Full Log
               </button>
-              {(!requiresAuth || authType === 'APPLICATION') && (
-                <button onClick={handleExecute} className="btn btn-primary">
-                  Execute
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {executionStatus === 'idle' && authStatus === 'idle' && (
+              <>
+                <button onClick={handleClose} className="btn btn-secondary">
+                  Cancel
                 </button>
-              )}
-            </>
-          )}
+                {(!requiresAuth || authType === 'APPLICATION') && (
+                  <button onClick={handleExecute} className="btn btn-primary">
+                    Execute
+                  </button>
+                )}
+              </>
+            )}
 
-          {(executionStatus === 'success' || executionStatus === 'error') && (
-            <button onClick={handleClose} className="btn btn-primary">
-              Close
-            </button>
-          )}
+            {(executionStatus === 'success' || executionStatus === 'error') && (
+              <button onClick={handleClose} className="btn btn-primary">
+                Close
+              </button>
+            )}
 
-          {authStatus === 'error' && (
-            <button onClick={initiateDeviceCodeFlow} className="btn btn-primary">
-              Retry Authentication
-            </button>
-          )}
+            {authStatus === 'error' && (
+              <button onClick={initiateDeviceCodeFlow} className="btn btn-primary">
+                Retry Authentication
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
