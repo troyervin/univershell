@@ -14,15 +14,17 @@ datasource db {
 // ============================================
 
 model User {
-  id           String   @id @default(uuid())
-  username     String   @unique
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  firstName    String?  @map("first_name")
-  lastName     String?  @map("last_name")
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id                    String    @id @default(uuid())
+  username              String    @unique
+  email                 String    @unique
+  passwordHash          String    @map("password_hash")
+  firstName             String?   @map("first_name")
+  lastName              String?   @map("last_name")
+  isActive              Boolean   @default(true) @map("is_active")
+  lastPasswordChangeAt  DateTime? @map("last_password_change_at")
+  requirePasswordChange Boolean   @default(false) @map("require_password_change")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   // Relations
   userRoles           UserRole[]
@@ -31,6 +33,8 @@ model User {
   microsoftConnection UserMicrosoftConnection?
   executionLogs       ExecutionLog[]
   createdScripts      Script[]                 @relation("ScriptCreator")
+  mfa                 UserMFA?
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -369,4 +373,97 @@ enum ExecutionStatus {
   SUCCESS
   FAILED
   CANCELLED
+}
+
+// ============================================
+// Authentication & Security
+// ============================================
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token, expiresAt])
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model UserMFA {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  isEnabled       Boolean  @default(false) @map("is_enabled")
+  totpSecretEnc   String?  @map("totp_secret_enc") // Encrypted TOTP secret
+  backupCodesEnc  String?  @map("backup_codes_enc") @db.Text // Encrypted backup codes JSON array
+  lastVerifiedAt  DateTime? @map("last_verified_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_mfa")
+}
+
+model SAMLConfig {
+  id                  String   @id @default(uuid())
+  name                String   @unique // e.g., "azure-ad", "okta"
+  displayName         String   @map("display_name")
+  isEnabled           Boolean  @default(false) @map("is_enabled")
+  entryPoint          String   @map("entry_point") // IdP SSO URL
+  issuer              String   // SP entity ID
+  cert                String   @db.Text // IdP public certificate
+  callbackUrl         String   @map("callback_url")
+  identifierFormat    String?  @map("identifier_format")
+  emailAttribute      String   @default("email") @map("email_attribute")
+  firstNameAttribute  String?  @map("first_name_attribute")
+  lastNameAttribute   String?  @map("last_name_attribute")
+  autoProvision       Boolean  @default(false) @map("auto_provision") // Create users on first login
+  defaultRoles        Json     @default("[]") @map("default_roles") // Roles to assign to new users
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("saml_configs")
+}
+
+model SMTPSettings {
+  id            String   @id @default(uuid())
+  host          String
+  port          Int
+  secure        Boolean  @default(true) // Use TLS
+  username      String
+  passwordEnc   String   @map("password_enc") // Encrypted password
+  fromAddress   String   @map("from_address")
+  fromName      String   @map("from_name")
+  isDefault     Boolean  @default(false) @map("is_default")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("smtp_settings")
+}
+
+model EmailLog {
+  id          String        @id @default(uuid())
+  to          String
+  subject     String
+  body        String        @db.Text
+  status      EmailStatus
+  errorMessage String?      @db.Text @map("error_message")
+  sentAt      DateTime?     @map("sent_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  @@index([to, createdAt])
+  @@map("email_logs")
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
 }
