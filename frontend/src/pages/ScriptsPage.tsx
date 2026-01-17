@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileCode, Play, Tag, Plus, Edit } from 'lucide-react';
+import { FileCode, Play, Tag, Plus, Edit, Download, Upload, Trash2 } from 'lucide-react';
 import api from '../lib/api';
 import { useTenantStore } from '../stores/tenantStore';
 import { useAuthStore } from '../stores/authStore';
 import ExecutionModal from '../components/ExecutionModal';
+import ImportScriptModal from '../components/ImportScriptModal';
 
 interface Script {
   id: string;
@@ -30,24 +31,89 @@ export default function ScriptsPage() {
     isOpen: boolean;
     script: Script | null;
   }>({ isOpen: false, script: null });
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'execute' | 'manage'>('execute');
 
-  const canManageScripts = user?.roles?.includes('admin') || user?.roles?.includes('script_manager');
+  const isGlobalAdmin = user?.roles?.includes('admin');
+  const isScriptManager = user?.roles?.includes('script_manager');
+  const canManageScripts = isGlobalAdmin || isScriptManager;
+
+  // Check if user is admin of any tenant
+  const adminTenantIds = Object.entries(user?.tenantRoles || {})
+    .filter(([_, role]) => role === 'ADMIN')
+    .map(([tenantId, _]) => tenantId);
+  const isTenantAdmin = adminTenantIds.length > 0;
+
+  const canManageAnyScripts = canManageScripts || isTenantAdmin;
 
   useEffect(() => {
     fetchScripts();
-  }, [selectedTenant]);
+  }, [selectedTenant, viewMode]);
 
   const fetchScripts = async () => {
     setLoading(true);
     try {
       const response = await api.get('/scripts', {
-        params: selectedTenant ? { tenantId: selectedTenant.id } : {},
+        params: {
+          ...(selectedTenant && { tenantId: selectedTenant.id }),
+          ...(viewMode === 'manage' && { manageable: 'true' }),
+        },
       });
       setScripts(response.data);
     } catch (error) {
       console.error('Failed to fetch scripts:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const canManageThisScript = (script: Script): boolean => {
+    // Global admins and script managers can manage all scripts
+    if (isGlobalAdmin || isScriptManager) {
+      return true;
+    }
+
+    // Tenant admins cannot manage global scripts
+    if (script.isGlobal) {
+      return false;
+    }
+
+    // Check if user is admin of any tenant this script is assigned to
+    // (This would require script.tenantAssignments to be included, but for now we'll check the basic permission)
+    return isTenantAdmin;
+  };
+
+  const handleExportScript = async (scriptId: string, scriptName: string) => {
+    try {
+      const response = await api.get(`/scripts/export/${scriptId}`, {
+        responseType: 'blob',
+      });
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${scriptName}.json`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      alert(`Failed to export script: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
+  const handleDeleteScript = async (scriptId: string, scriptName: string) => {
+    if (!confirm(`Are you sure you want to delete "${scriptName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await api.delete(`/scripts/${scriptId}`);
+      alert('Script deleted successfully');
+      fetchScripts();
+    } catch (error: any) {
+      alert(`Failed to delete script: ${error.response?.data?.error || error.message}`);
     }
   };
 
@@ -85,15 +151,54 @@ export default function ScriptsPage() {
               : 'All available scripts'}
           </p>
         </div>
-        {canManageScripts && (
-          <button
-            onClick={() => navigate('/scripts/new')}
-            className="btn btn-primary flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Create Script
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {canManageAnyScripts && (
+            <>
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('execute')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                    viewMode === 'execute'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Execute
+                </button>
+                <button
+                  onClick={() => setViewMode('manage')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                    viewMode === 'manage'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Manage
+                </button>
+              </div>
+
+              {/* Import Script Button */}
+              <button
+                onClick={() => setImportModalOpen(true)}
+                className="btn btn-secondary flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                Import
+              </button>
+
+              {/* Create Script Button */}
+              {canManageScripts && (
+                <button
+                  onClick={() => navigate('/scripts/new')}
+                  className="btn btn-primary flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -138,18 +243,56 @@ export default function ScriptsPage() {
                 </div>
               )}
 
-              <button
-                onClick={() => openExecutionModal(script)}
-                disabled={!selectedTenant}
-                className="btn btn-primary w-full flex items-center justify-center gap-2"
-              >
-                <Play className="w-4 h-4" />
-                Execute
-              </button>
+              {viewMode === 'execute' ? (
+                <button
+                  onClick={() => openExecutionModal(script)}
+                  disabled={!selectedTenant}
+                  className="btn btn-primary w-full flex items-center justify-center gap-2"
+                >
+                  <Play className="w-4 h-4" />
+                  Execute
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => navigate(`/scripts/${script.id}/edit`)}
+                      className="btn btn-secondary flex items-center justify-center gap-2"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleExportScript(script.id, script.name)}
+                      className="btn btn-secondary flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteScript(script.id, script.displayName)}
+                    className="btn w-full flex items-center justify-center gap-2 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
+
+      {/* Import Modal */}
+      <ImportScriptModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImportSuccess={() => {
+          fetchScripts();
+          alert('Script imported successfully');
+        }}
+      />
 
       {/* Execution Modal */}
       {executionModal.script && selectedTenant && (
