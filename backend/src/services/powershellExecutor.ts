@@ -13,6 +13,7 @@ export interface ExecutionContext {
   userId: string;
   variables: Record<string, any>;
   timeout?: number;
+  accessToken?: string; // Microsoft access token for authentication
 }
 
 /**
@@ -32,14 +33,22 @@ export async function executePowerShellScript(
     // Prepare the script with variable injection
     const preparedScript = injectVariables(scriptCode, context.variables);
 
+    // Build environment variables
+    const envVars: Record<string, string> = {
+      ...process.env as Record<string, string>,
+      UNIVERSHELL_TENANT_ID: context.tenantId,
+      UNIVERSHELL_USER_ID: context.userId,
+    };
+
+    // Add access token if provided
+    if (context.accessToken) {
+      envVars.UNIVERSHELL_ACCESS_TOKEN = context.accessToken;
+    }
+
     // Spawn PowerShell process
     const ps = spawn('pwsh', ['-NoProfile', '-Command', preparedScript], {
       timeout,
-      env: {
-        ...process.env,
-        UNIVERSHELL_TENANT_ID: context.tenantId,
-        UNIVERSHELL_USER_ID: context.userId,
-      },
+      env: envVars,
     });
 
     // Collect stdout

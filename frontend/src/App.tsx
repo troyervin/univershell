@@ -7,6 +7,7 @@ import { useTenantStore } from './stores/tenantStore';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ScriptsPage from './pages/ScriptsPage';
+import ScriptEditorPage from './pages/ScriptEditorPage';
 import WorkflowsPage from './pages/WorkflowsPage';
 import TenantsPage from './pages/TenantsPage';
 import TenantAdminPage from './pages/TenantAdminPage';
@@ -51,6 +52,8 @@ function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="scripts" element={<ScriptsPage />} />
+          <Route path="scripts/new" element={<ScriptEditorPage />} />
+          <Route path="scripts/:scriptId/edit" element={<ScriptEditorPage />} />
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="tenants" element={<TenantsPage />} />
           <Route path="tenant-admin/:tenantId" element={<TenantAdminPage />} />

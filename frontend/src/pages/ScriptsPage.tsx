@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { FileCode, Play, Tag } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { FileCode, Play, Tag, Plus, Edit } from 'lucide-react';
 import api from '../lib/api';
 import { useTenantStore } from '../stores/tenantStore';
+import { useAuthStore } from '../stores/authStore';
+import ExecutionModal from '../components/ExecutionModal';
 
 interface Script {
   id: string;
@@ -12,13 +15,23 @@ interface Script {
   tags: string[];
   isGlobal: boolean;
   parameters: any[];
+  requiresAuth: boolean;
+  authType: 'APPLICATION' | 'DELEGATED' | null;
+  credentialType?: string;
 }
 
 export default function ScriptsPage() {
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
   const { selectedTenant } = useTenantStore();
   const [scripts, setScripts] = useState<Script[]>([]);
   const [loading, setLoading] = useState(true);
-  const [executing, setExecuting] = useState<string | null>(null);
+  const [executionModal, setExecutionModal] = useState<{
+    isOpen: boolean;
+    script: Script | null;
+  }>({ isOpen: false, script: null });
+
+  const canManageScripts = user?.roles?.includes('admin') || user?.roles?.includes('script_manager');
 
   useEffect(() => {
     fetchScripts();
@@ -38,30 +51,23 @@ export default function ScriptsPage() {
     }
   };
 
-  const executeScript = async (scriptId: string) => {
+  const openExecutionModal = (script: Script) => {
     if (!selectedTenant) {
       alert('Please select a tenant first');
       return;
     }
 
-    setExecuting(scriptId);
-    try {
-      const response = await api.post('/executions/script', {
-        scriptId,
-        tenantId: selectedTenant.id,
-        parameters: {},
-      });
+    setExecutionModal({
+      isOpen: true,
+      script,
+    });
+  };
 
-      alert(
-        response.data.success
-          ? `Script executed successfully!\n\nOutput: ${JSON.stringify(response.data.output, null, 2)}`
-          : `Script failed: ${response.data.error}`
-      );
-    } catch (error: any) {
-      alert(`Execution failed: ${error.response?.data?.error || error.message}`);
-    } finally {
-      setExecuting(null);
-    }
+  const closeExecutionModal = () => {
+    setExecutionModal({
+      isOpen: false,
+      script: null,
+    });
   };
 
   if (loading) {
@@ -78,6 +84,16 @@ export default function ScriptsPage() {
               ? `Available scripts for ${selectedTenant.displayName}`
               : 'All available scripts'}
           </p>
+        </div>
+        {canManageScripts && (
+          <button
+            onClick={() => navigate('/scripts/new')}
+            className="btn btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Create Script
+          </button>
+        )}
         </div>
       </div>
 
@@ -123,16 +139,30 @@ export default function ScriptsPage() {
               )}
 
               <button
-                onClick={() => executeScript(script.id)}
-                disabled={!selectedTenant || executing === script.id}
+                onClick={() => openExecutionModal(script)}
+                disabled={!selectedTenant}
                 className="btn btn-primary w-full flex items-center justify-center gap-2"
               >
                 <Play className="w-4 h-4" />
-                {executing === script.id ? 'Executing...' : 'Execute'}
+                Execute
               </button>
             </div>
           ))}
         </div>
+      )}
+
+      {/* Execution Modal */}
+      {executionModal.script && selectedTenant && (
+        <ExecutionModal
+          isOpen={executionModal.isOpen}
+          onClose={closeExecutionModal}
+          scriptId={executionModal.script.id}
+          scriptName={executionModal.script.displayName}
+          tenantId={selectedTenant.id}
+          requiresAuth={executionModal.script.requiresAuth}
+          authType={executionModal.script.authType}
+          parameters={{}}
+        />
       )}
     </div>
   );
