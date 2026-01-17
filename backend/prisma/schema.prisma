@@ -25,13 +25,31 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
-  userRoles         UserRole[]
-  tenantUsers       TenantUser[]
-  tenantGroupMembers TenantGroupMember[]
-  executionLogs     ExecutionLog[]
-  createdScripts    Script[]            @relation("ScriptCreator")
+  userRoles           UserRole[]
+  tenantUsers         TenantUser[]
+  tenantGroupMembers  TenantGroupMember[]
+  microsoftConnection UserMicrosoftConnection?
+  executionLogs       ExecutionLog[]
+  createdScripts      Script[]                 @relation("ScriptCreator")
 
   @@map("users")
+}
+
+model UserMicrosoftConnection {
+  id                 String   @id @default(uuid())
+  userId             String   @unique @map("user_id")
+  refreshTokenEnc    String   @map("refresh_token_enc") @db.Text // Encrypted refresh token
+  accessTokenEnc     String?  @map("access_token_enc") @db.Text // Encrypted access token (cached)
+  tokenExpiresAt     DateTime? @map("token_expires_at")
+  scope              String?  // Granted scopes
+  microsoftAccountId String?  @map("microsoft_account_id") // Microsoft user ID
+  microsoftEmail     String?  @map("microsoft_email")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_microsoft_connections")
 }
 
 model Role {
@@ -202,19 +220,22 @@ enum AuthType {
 // ============================================
 
 model Script {
-  id          String   @id @default(uuid())
-  name        String
-  displayName String   @map("display_name")
-  description String?
-  code        String   @db.Text
-  parameters  Json     @default("[]") // Array of parameter definitions
-  outputs     Json     @default("[]") // Array of output variable definitions
-  isGlobal    Boolean  @default(false) @map("is_global")
-  category    String?
-  tags        String[] @default([])
-  createdBy   String   @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  name              String
+  displayName       String   @map("display_name")
+  description       String?
+  code              String   @db.Text
+  parameters        Json     @default("[]") // Array of parameter definitions
+  outputs           Json     @default("[]") // Array of output variable definitions
+  isGlobal          Boolean  @default(false) @map("is_global")
+  category          String?
+  tags              String[] @default([])
+  requiresAuth      Boolean  @default(false) @map("requires_auth") // Does script need authentication?
+  credentialType    CredentialType? @map("credential_type") // Which type of credential to use
+  authType          AuthType? @map("auth_type") // Application or Delegated auth
+  createdBy         String   @map("created_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   // Relations
   creator            User                     @relation("ScriptCreator", fields: [createdBy], references: [id])

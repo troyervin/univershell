@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   Home,
   FileCode,
@@ -6,12 +6,14 @@ import {
   Building2,
   Clock,
   LogOut,
+  User,
   ChevronDown
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useTenantStore } from '../stores/tenantStore';
 
 export default function Layout() {
+  const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { tenants, selectedTenant, selectTenant } = useTenantStore();
 
@@ -63,6 +65,13 @@ export default function Layout() {
                   </p>
                   <p className="text-xs text-gray-500">{user?.email}</p>
                 </div>
+                <button
+                  onClick={() => navigate('/profile')}
+                  className="btn btn-secondary p-2"
+                  title="Profile"
+                >
+                  <User className="w-5 h-5" />
+                </button>
                 <button
                   onClick={logout}
                   className="btn btn-secondary p-2"
